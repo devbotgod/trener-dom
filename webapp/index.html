@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>You vs You</title>
+  <link rel="stylesheet" href="./style.css" />
+  <!-- Telegram клиент сам инжектит WebApp; внешний скрипт не грузим — на iOS он иногда затирает initData -->
+  <script>
+    /* Раскрыть мини-приложение сразу, не дожидаясь тяжёлого app.js */
+    (function () {
+      function expandNow() {
+        var w = window.Telegram && window.Telegram.WebApp;
+        if (!w) return false;
+        try { w.ready(); } catch (e) {}
+        try { w.expand(); } catch (e) {}
+        try { if (typeof w.requestFullscreen === "function") w.requestFullscreen(); } catch (e) {}
+        try { if (typeof w.disableVerticalSwipes === "function") w.disableVerticalSwipes(); } catch (e) {}
+        return true;
+      }
+      if (!expandNow()) {
+        var n = 0;
+        var t = setInterval(function () {
+          n += 1;
+          if (expandNow() || n > 60) clearInterval(t);
+        }, 50);
+      }
+      document.addEventListener("DOMContentLoaded", expandNow);
+    })();
+  </script>
+</head>
+<body>
+<div id="app">
+
+  <!-- Loading -->
+  <section id="screen-loading" class="screen active">
+    <div class="spinner"></div>
+    <div class="loading-sub" id="loading-text">Открываю Врата…</div>
+  </section>
+
+  <!-- Home (3 вкладки) -->
+  <section id="screen-home" class="screen">
+    <div class="tab-scroll">
+
+      <!-- ПОХОД -->
+      <div class="tabpanel active" id="tab-pohod">
+        <div class="home-header">
+          <div class="home-kicker">
+            <div class="home-kicker-eye" id="home-kicker-eye">сегодня</div>
+            <div class="home-kicker-title" id="home-kicker">Приключение</div>
+            <div class="home-kicker-sub" id="home-kicker-sub">выбери уровень — и в бой</div>
+          </div>
+          <div class="streak-chip" id="streak-chip" title="Серия дней подряд">
+            <span class="streak-flame">🔥</span>
+            <span class="streak-meta">
+              <b id="streak-hdr">0</b>
+              <span class="streak-lbl">серия</span>
+            </span>
+          </div>
+        </div>
+        <div class="player-card">
+          <div class="player-row">
+            <div class="level-badge"><small>LVL</small><b id="pl-level">1</b></div>
+            <div class="player-meta">
+              <div class="player-name">Охотник <span class="rank-pill">ранг <b id="pl-rank">E</b></span></div>
+              <div class="bar bar-hp"><i id="pl-hp-bar" style="width:100%"></i></div>
+              <div class="bar-label"><span>HP</span><span id="pl-hp-text">168 / 168</span></div>
+            </div>
+          </div>
+          <div class="bar-label" style="margin-top:12px"><span>Опыт</span><span id="pl-xp-text">0 / 40</span></div>
+          <div class="bar bar-xp"><i id="pl-xp-bar" style="width:0%"></i></div>
+        </div>
+
+        <div class="home-tip" id="home-tip" style="display:none">
+          <span>👤 Загляни в <b>Профиль</b> — там выбор целей, режима и сложности.</span>
+          <button class="home-tip-x" id="home-tip-x">✕</button>
+        </div>
+
+        <!-- Режим Приключение -->
+        <div id="pohod-adventure">
+          <div class="train-card" id="train-card">
+            <div class="train-ic">🔥</div>
+            <div class="train-body">
+              <div class="train-title">Свободная тренировка</div>
+              <div class="train-sub" id="train-sub">Качай любое упражнение за опыт · осталось <b id="train-left">100</b> XP сегодня</div>
+            </div>
+            <div class="train-go">＋</div>
+          </div>
+          <div class="gates-title">Карта Врат</div>
+          <div class="premium-banner" id="premium-banner" style="display:none"></div>
+          <div id="roadmap" class="roadmap"></div>
+        </div>
+
+        <!-- Режим Простая тренировка -->
+        <div id="pohod-simple" style="display:none">
+          <div class="wh-hero" id="wh-hero"><div class="wh-hero-cap" id="wh-cap">Сияй ✨</div></div>
+          <div class="workout-head">
+            <div class="wh-title">Тренировка дня</div>
+            <div class="wh-sub" id="workout-sub">Выполни упражнения — камера считает</div>
+          </div>
+          <div class="workout-list" id="workout-list"></div>
+        </div>
+      </div>
+
+      <!-- ЗАДАНИЯ -->
+      <div class="tabpanel" id="tab-quests">
+        <h2 class="tab-h">🎯 Задания</h2>
+        <div class="streak-banner">
+          <div class="sb-flame">🔥</div>
+          <div style="flex:1">
+            <div class="sb-count"><b id="streak-big">0</b> дней подряд</div>
+            <div class="sb-sub" id="streak-sub">Тренируйся каждый день, чтобы растить серию</div>
+          </div>
+          <div class="freeze-chip" id="freeze-chip" title="Дни отдыха защищают серию">🛡️ <b id="freeze-n">1</b></div>
+        </div>
+        <div class="tab-label">Ежедневные задания</div>
+        <div class="quests-list" id="quests-list"></div>
+        <div class="quests-hint">Задания обновляются каждый день. Награда — опыт.</div>
+      </div>
+
+      <!-- РЕЙТИНГ -->
+      <div class="tabpanel" id="tab-top">
+        <h2 class="tab-h">🏆 Рейтинг</h2>
+        <p class="tab-sub" id="lb-sub">Больше всех повторов. Соревнуйся!</p>
+        <div class="lb-tabs" id="lb-tabs">
+          <button class="lb-tab on" data-period="week">Неделя</button>
+          <button class="lb-tab" data-period="season">Сезон</button>
+          <button class="lb-tab" data-period="friends">Друзья</button>
+        </div>
+        <button class="lb-invite" id="lb-invite" style="display:none">👥 Пригласить друга</button>
+        <div class="lb-list" id="lb-list"></div>
+        <div class="lb-me" id="lb-me"></div>
+      </div>
+
+      <!-- АРЕНА 1v1 -->
+      <div class="tabpanel" id="tab-arena">
+        <h2 class="tab-h">⚔️ Арена</h2>
+        <p class="tab-sub">1 на 1 · 60 секунд · кто сделает больше повторов</p>
+        <div class="arena-stats" id="arena-stats">
+          <div class="as-item"><b id="as-w">0</b><span>побед</span></div>
+          <div class="as-item"><b id="as-d">0</b><span>ничьих</span></div>
+          <div class="as-item"><b id="as-l">0</b><span>поражений</span></div>
+        </div>
+
+        <!-- Матч всегда сверху — иначе «Готов» теряется под упражнениями -->
+        <div class="arena-match" id="arena-match">
+          <div class="arena-status" id="arena-status" style="display:none"></div>
+          <div class="arena-lobby" id="arena-lobby" style="display:none">
+            <div class="al-title" id="al-title">Соперник найден</div>
+            <div class="al-vs">
+              <div class="al-side"><div class="al-av" id="al-me-av">🧑</div><div class="al-name" id="al-me-name">Ты</div><div class="al-ready" id="al-me-ready"></div></div>
+              <div class="al-mid">VS</div>
+              <div class="al-side"><div class="al-av" id="al-opp-av">❓</div><div class="al-name" id="al-opp-name">…</div><div class="al-ready" id="al-opp-ready"></div></div>
+            </div>
+            <div class="al-ex" id="al-ex"></div>
+            <button class="btn" id="arena-ready">Готов!</button>
+            <button class="btn ghost" id="arena-leave">Выйти</button>
+          </div>
+          <button class="arena-btn" id="arena-cancel-q" style="display:none;margin-top:8px">Отменить поиск</button>
+        </div>
+
+        <div class="arena-setup" id="arena-setup">
+          <div class="tab-label">Упражнение</div>
+          <div class="arena-ex-scroll" id="arena-ex-list"></div>
+
+          <div class="arena-actions">
+            <button class="arena-btn primary" id="arena-random">
+              <span class="ab-ic">🎲</span>
+              <span class="ab-txt"><b>Случайный соперник</b><small>Быстрый матч онлайн</small></span>
+            </button>
+          </div>
+
+          <div class="tab-label">Входящие вызовы</div>
+          <div class="arena-invites" id="arena-invites"></div>
+
+          <div class="tab-label">Друзья</div>
+          <div class="arena-friends" id="arena-friends"></div>
+          <button class="lb-invite" id="arena-invite-fr">👥 Пригласить друга в игру</button>
+        </div>
+      </div>
+
+      <!-- ПРОФИЛЬ -->
+      <div class="tabpanel" id="tab-profile">
+        <h2 class="tab-h">👤 Профиль</h2>
+        <p class="tab-sub">Ник, цели, напоминания и поддержка проекта.</p>
+        <div class="prof-hero">
+          <div class="pf-avatar" id="pf-avatar">🧑</div>
+          <div>
+            <div class="pf-name">Охотник · <span id="pf-title">Новобранец</span></div>
+            <div class="pf-sub">Уровень <b id="pf-level">1</b> · ранг <span id="pf-rank">E</span></div>
+          </div>
+        </div>
+        <div class="tab-label">Ник в рейтинге</div>
+        <div class="prog-current" id="nick-current"></div>
+        <div class="tab-label">Активность · повторы по дням</div>
+        <div class="chart" id="chart"></div>
+        <div class="prof-stats" id="prof-stats"></div>
+        <div class="premium-card" id="premium-card"></div>
+        <div class="tab-label">Цели тренировок</div>
+        <div class="goals-current" id="goals-current"></div>
+        <div class="tab-label">Режим игры</div>
+        <div class="seg" id="mode-seg">
+          <button class="seg-btn" data-mode="adventure"><b>⚔️</b><span>Приключение</span></button>
+          <button class="seg-btn" data-mode="simple"><b>🎯</b><span>Простая</span></button>
+        </div>
+        <div class="tab-label">Сложность</div>
+        <div class="seg" id="prog-seg">
+          <button class="seg-btn" data-prog="novice"><b>🌱</b><span>Новичок</span></button>
+          <button class="seg-btn" data-prog="medium"><b>💪</b><span>Средний</span></button>
+          <button class="seg-btn" data-prog="pro"><b>🔥</b><span>Про</span></button>
+        </div>
+        <div class="seg-desc" id="prog-desc"></div>
+        <div class="tab-label">Напоминания</div>
+        <div class="prof-settings">
+          <button class="set-row" id="set-reminders"><span>🔔 Напоминать заниматься</span><span class="set-val" id="set-reminders-v">Вкл</span></button>
+        </div>
+        <div class="remind-time" id="remind-time">
+          <div class="remind-time-label">Во сколько писать (МСК)</div>
+          <div class="remind-custom">
+            <select class="remind-select" id="remind-hour" aria-label="Часы"></select>
+            <span class="remind-colon">:</span>
+            <select class="remind-select" id="remind-minute" aria-label="Минуты"></select>
+            <button type="button" class="btn remind-save" id="remind-save">Сохранить</button>
+          </div>
+          <div class="remind-hint" id="remind-hint">Ещё одно мягкое напоминание через 2 часа, если не потренируешься</div>
+        </div>
+        <div class="donate-card" id="donate-card">
+          <div class="dc-ic">⭐</div>
+          <div class="dc-body">
+            <div class="dc-title">Пожертвование на развитие</div>
+            <div class="dc-sub" id="donate-sub">Любая сумма Stars — спасибо за поддержку</div>
+          </div>
+          <div class="dc-go">→</div>
+        </div>
+        <div class="tab-label">Связь</div>
+        <div class="fb-card" id="btn-feedback">
+          <div class="fb-ic">💬</div>
+          <div class="fb-body">
+            <div class="fb-title">Обратная связь</div>
+            <div class="fb-sub">Идея, баг или пожелание — напиши мне лично</div>
+          </div>
+          <div class="fb-go">›</div>
+        </div>
+        <button class="more-toggle" id="more-toggle">Ещё настройки ▾</button>
+        <div class="more-panel" id="more-panel" hidden>
+          <div class="tab-label">Аватар</div>
+          <div class="avatar-grid" id="avatar-grid"></div>
+          <div class="tab-label">Титулы</div>
+          <div class="titles-list" id="titles-list"></div>
+          <div class="tab-label">Звук</div>
+          <div class="prof-settings">
+            <button class="set-row" id="set-uisound"><span>🔊 Звук в меню</span><span class="set-val" id="set-uisound-v">Вкл</span></button>
+            <button class="set-row" id="set-sound"><span>⚔️ Звук в бою</span><span class="set-val" id="set-sound-v">Вкл</span></button>
+            <button class="set-row" id="set-music"><span>🎵 Музыка в бою</span><span class="set-val" id="set-music-v">Вкл</span></button>
+          </div>
+          <button class="btn ghost danger" id="btn-reset" style="margin-top:16px">↺ Сбросить прогресс</button>
+        </div>
+        <div class="pf-ver">You vs You</div>
+      </div>
+
+    </div>
+
+    <nav class="tabbar">
+      <button class="tabbtn active" data-tab="pohod"><span class="ti">⚔️</span><span>Поход</span></button>
+      <button class="tabbtn" data-tab="arena"><span class="ti">🥊</span><span>Арена</span></button>
+      <button class="tabbtn" data-tab="quests"><span class="ti">🎯</span><span>Задания</span></button>
+      <button class="tabbtn" data-tab="top"><span class="ti">🏆</span><span>Топ</span></button>
+      <button class="tabbtn" data-tab="profile"><span class="ti">👤</span><span>Профиль</span></button>
+    </nav>
+  </section>
+
+  <!-- Battle / train -->
+  <section id="screen-battle" class="screen">
+    <div id="cam-wrap">
+      <video id="cam" autoplay playsinline muted></video>
+      <canvas id="overlay"></canvas>
+      <div class="vignette"></div>
+      <div class="fx-flash" id="fx-flash"></div>
+    </div>
+
+    <div class="status-pill" id="status-pill"></div>
+    <div class="combo" id="combo"></div>
+
+    <div class="cam-controls">
+      <button class="ctrl-btn" id="btn-rest" title="Отдых">⏱️</button>
+      <button class="ctrl-btn" id="btn-music" title="Музыка">🎵</button>
+      <button class="ctrl-btn" id="btn-mute" title="Звук">🔊</button>
+      <button class="ctrl-btn" id="btn-info" title="Как делать">ℹ️</button>
+      <button class="ctrl-btn" id="btn-flip" title="Сменить камеру">🔄</button>
+    </div>
+
+    <div class="battle-top">
+      <div class="gate-tag" id="b-gate-tag">ВРАТА E · ОГРСКИЙ ЛАГЕРЬ</div>
+
+      <!-- враг (бой) -->
+      <div class="enemy-block" id="enemy-block">
+        <div class="enemy-avatar" id="b-avatar">👹</div>
+        <div class="enemy-name-row">
+          <span class="enemy-name" id="b-enemy-name">Огр-разведчик</span>
+          <span class="ex-chip" id="b-ex-chip">🔥 Отжимания</span>
+        </div>
+        <div class="enemy-hp-wrap">
+          <div class="enemy-hp-bar">
+            <i id="b-enemy-hp-bar" style="width:100%"></i>
+            <div class="enemy-hp-text" id="b-enemy-hp-text">HP 10 / 10</div>
+          </div>
+          <div class="wave-dots" id="b-wave-dots"></div>
+        </div>
+      </div>
+
+      <!-- разминка -->
+      <div class="train-head" id="train-head">
+        <div class="train-head-title">🔥 РАЗМИНКА</div>
+        <span class="ex-chip" id="t-ex-chip">🔥 Отжимания</span>
+        <div class="train-head-sub" id="t-xp-line">+0 XP · осталось 100</div>
+      </div>
+
+      <!-- дуэль 1v1 -->
+      <div class="duel-head" id="duel-head" style="display:none">
+        <div class="duel-timer" id="duel-timer">60</div>
+        <div class="duel-score">
+          <div class="ds-me"><span id="duel-me-name">Ты</span><b id="duel-me-reps">0</b></div>
+          <div class="ds-vs">VS</div>
+          <div class="ds-opp"><span id="duel-opp-name">Соперник</span><b id="duel-opp-reps">0</b></div>
+        </div>
+        <span class="ex-chip" id="duel-ex-chip">🔥 Отжимания</span>
+      </div>
+    </div>
+
+    <div class="counter-wrap">
+      <button class="madj" id="btn-minus">−1</button>
+      <div class="counter" id="b-counter"><b id="b-count">0</b><small id="b-count-label">ПОВТОРЫ</small></div>
+      <button class="madj" id="btn-plus">+1</button>
+    </div>
+    <div class="counter-tools">
+      <button class="side-btn" id="btn-exit">🚪</button>
+      <span class="madj-hint">камера ошиблась? поправь счёт кнопками ±</span>
+      <button class="side-btn" id="btn-cal">🎯</button>
+    </div>
+
+    <div class="battle-bottom">
+      <div class="you-hp-wrap" id="you-hp-wrap">
+        <div class="you-hp-label">Твоё HP <span id="b-you-hp-text">168 / 168</span></div>
+        <div class="you-hp-bar"><i id="b-you-hp-bar" style="width:100%"></i></div>
+      </div>
+      <div class="battle-actions">
+        <button class="btn ghost" id="btn-pause">⏸ Пауза</button>
+      </div>
+      <div class="hint-line" id="b-hint">Запускаю камеру…</div>
+    </div>
+
+    <!-- result overlay -->
+    <div class="result" id="result">
+      <div class="confetti" id="confetti"></div>
+      <img class="r-img" id="r-img" alt="" />
+      <div class="big-emoji" id="r-emoji">🏆</div>
+      <h2 id="r-title">Победа!</h2>
+      <p id="r-sub"></p>
+      <div class="reward" id="r-reward"></div>
+      <button class="btn" id="r-btn">Дальше</button>
+    </div>
+  </section>
+
+  <!-- how-to modal -->
+  <div class="modal" id="how-modal">
+    <div class="modal-card">
+      <div class="how-fig" id="how-fig"></div>
+      <div class="modal-emoji" id="how-icon" style="display:none">🔥</div>
+      <h3 id="how-title">Отжимания</h3>
+      <p id="how-text"></p>
+      <p class="modal-tip" id="how-tip"></p>
+      <button class="btn" id="how-close">Понятно</button>
+    </div>
+  </div>
+
+  <!-- exercise picker (разминка) -->
+  <div class="modal" id="ex-modal">
+    <div class="modal-card">
+      <h3>Выбери упражнение</h3>
+      <div class="ex-list" id="ex-list"></div>
+      <button class="btn ghost" id="ex-cancel">Отмена</button>
+    </div>
+  </div>
+
+  <!-- онбординг: пол + цели -->
+  <div class="modal" id="onboard-modal">
+    <div class="modal-card" id="onboard-card"></div>
+  </div>
+
+  <!-- program picker / онбординг сложности -->
+  <div class="modal" id="program-modal">
+    <div class="modal-card">
+      <div class="modal-emoji">🎯</div>
+      <h3>Выбери сложность</h3>
+      <p class="modal-tip">Под неё подстроится нагрузка (сколько повторов на врага). Можно сменить в Профиле.</p>
+      <div class="prog-list" id="prog-list"></div>
+    </div>
+  </div>
+
+  <!-- обратная связь -->
+  <div class="modal" id="fb-modal">
+    <div class="modal-card">
+      <div class="modal-emoji">💬</div>
+      <h3>Обратная связь</h3>
+      <p class="modal-tip">Что улучшить? Читаю каждое сообщение лично.</p>
+      <div class="fb-topics" id="fb-topics">
+        <button class="fb-topic" data-t="Баг">🐞 Баг</button>
+        <button class="fb-topic" data-t="Идея">💡 Идея</button>
+        <button class="fb-topic" data-t="Упражнение">🏋️ Упражнение</button>
+        <button class="fb-topic" data-t="Другое">✍️ Другое</button>
+      </div>
+      <textarea class="fb-input" id="fb-input" maxlength="800" rows="3" placeholder="Опиши подробнее…"></textarea>
+      <div class="fb-count" id="fb-count">0 / 800</div>
+      <div class="fb-actions">
+        <button class="btn ghost" id="fb-cancel">Отмена</button>
+        <button class="btn" id="fb-send">Отправить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- смена ника -->
+  <div class="modal" id="nick-modal">
+    <div class="modal-card">
+      <div class="modal-emoji">🏷️</div>
+      <h3>Ник в рейтинге</h3>
+      <p class="modal-tip">Как тебя видят в топе. Имя из Telegram не показывается — только этот ник.</p>
+      <input class="nick-input" id="nick-input" maxlength="20" placeholder="Твой ник" />
+      <button class="btn" id="nick-save">Сохранить</button>
+      <button class="btn ghost" id="nick-cancel" style="margin-top:8px">Отмена</button>
+    </div>
+  </div>
+
+  <!-- Premium / Stars -->
+  <div class="modal" id="premium-modal">
+    <div class="modal-card">
+      <div class="modal-emoji">⭐</div>
+      <h3>YOU vs YOU Premium</h3>
+      <p class="modal-tip">Бесплатно: <b id="prem-free">первые 2 локации</b>. Остальные биомы и полный поход — по Premium.</p>
+      <ul class="prem-list">
+        <li>Все локации и боссы</li>
+        <li>Полный прогресс без ограничений</li>
+        <li>Разовая оплата Telegram Stars</li>
+      </ul>
+      <button class="btn" id="prem-buy">⭐ Купить · <span id="prem-price">150</span> Stars</button>
+      <button class="btn ghost" id="prem-chat" style="margin-top:8px">Отправить счёт в чат бота</button>
+      <button class="btn ghost" id="prem-cancel" style="margin-top:8px">Позже</button>
+    </div>
+  </div>
+
+  <!-- Пожертвование / Stars -->
+  <div class="modal" id="donate-modal">
+    <div class="modal-card">
+      <div class="modal-emoji">✨</div>
+      <h3>Поддержка проекта</h3>
+      <p class="modal-tip">Добровольное пожертвование Stars на развитие YOU vs YOU. Любая сумма — уже помощь.</p>
+      <div class="donate-presets" id="donate-presets">
+        <button type="button" class="donate-chip" data-amt="10">10 ⭐</button>
+        <button type="button" class="donate-chip" data-amt="50">50 ⭐</button>
+        <button type="button" class="donate-chip" data-amt="100">100 ⭐</button>
+        <button type="button" class="donate-chip" data-amt="250">250 ⭐</button>
+      </div>
+      <label class="donate-label" for="donate-amount">Своя сумма</label>
+      <input class="donate-input" id="donate-amount" type="number" inputmode="numeric" min="1" max="10000" placeholder="Например 25" />
+      <button class="btn" id="donate-pay">⭐ Пожертвовать</button>
+      <button class="btn ghost" id="donate-chat" style="margin-top:8px">Отправить счёт в чат бота</button>
+      <button class="btn ghost" id="donate-cancel" style="margin-top:8px">Отмена</button>
+    </div>
+  </div>
+
+  <!-- Спасибо за пожертвование -->
+  <div class="modal" id="donate-thanks-modal">
+    <div class="modal-card">
+      <div class="modal-emoji">🙏</div>
+      <h3>Спасибо!</h3>
+      <p class="modal-tip" id="donate-thanks-text">
+        Спасибо, что помогаете развиваться проекту — мы это очень ценим.
+      </p>
+      <button class="btn" id="donate-thanks-ok">Продолжить</button>
+    </div>
+  </div>
+
+  <!-- Подтверждение сброса -->
+  <div class="modal" id="reset-modal">
+    <div class="modal-card">
+      <div class="modal-emoji">⚠️</div>
+      <h3>Сбросить прогресс?</h3>
+      <p class="modal-tip">Уровень, врата, стрик и история повторов обнулятся. Ник, цели, Premium и донаты сохранятся.</p>
+      <button class="btn danger" id="reset-confirm">Да, сбросить</button>
+      <button class="btn ghost" id="reset-cancel" style="margin-top:8px">Отмена</button>
+    </div>
+  </div>
+
+  <!-- разминка перед тренировкой -->
+  <div class="overlay-timer" id="warmup">
+    <div class="ot-emoji">🤸</div>
+    <h2>Разминка</h2>
+    <div class="ot-note">📐 Освободи ~2×2 м вокруг и встань на пол. На диване камера не распознаёт движения.</div>
+    <p class="ot-instr" id="warmup-instr">Марш на месте, разомни суставы</p>
+    <div class="ot-count" id="warmup-count">45</div>
+    <div class="ot-actions">
+      <button class="btn" id="warmup-ready">Я готов, начать</button>
+      <button class="btn ghost" id="warmup-skip">Пропустить</button>
+    </div>
+  </div>
+
+  <!-- таймер отдыха -->
+  <div class="overlay-timer" id="rest">
+    <div class="ot-emoji">😮‍💨</div>
+    <h2>Отдых</h2>
+    <p class="ot-instr">Восстанови дыхание</p>
+    <div class="ot-count" id="rest-count">30</div>
+    <div class="ot-actions">
+      <button class="btn ghost" id="rest-minus">−15 сек</button>
+      <button class="btn ghost" id="rest-plus">+15 сек</button>
+    </div>
+    <button class="btn" id="rest-skip" style="margin-top:10px;max-width:260px">Продолжить</button>
+  </div>
+
+  <!-- error -->
+  <div class="error-box" id="error-box">
+    <h3 id="err-title">Что-то пошло не так</h3>
+    <p id="err-text"></p>
+    <button class="btn" id="err-btn" style="max-width:240px">Повторить</button>
+  </div>
+
+  <div id="app-toast"></div>
+
+</div>
+<script src="./figures.js"></script>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
