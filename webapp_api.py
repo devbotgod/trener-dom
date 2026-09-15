@@ -44,6 +44,16 @@ logger = logging.getLogger(__name__)
 API_HOST = "127.0.0.1"
 API_PORT = 8090
 
+
+def _bot_deep_link(start_arg: str) -> str:
+    """Deep-link в бота; пустая строка, если BOT_USERNAME не задан."""
+    from config import BOT_USERNAME
+
+    if not BOT_USERNAME:
+        return ""
+    return f"https://t.me/{BOT_USERNAME}?start={start_arg}"
+
+
 # Секрет для локального тестирования без Telegram (?dev=...).
 # В проде ВЫКЛЮЧЕН: без ALLOW_DEV_AUTH=1 нельзя зайти «под владельца».
 # Раньше дефолт был "1" + клиент всем подставлял ?dev= → все логинились как владелец.
@@ -374,7 +384,6 @@ async def handle_leaderboard(request: web.Request) -> web.Response:
         if r["tid"] == tid:
             my_rank = r2
 
-    from config import BOT_USERNAME
     today = engine._today()
     season = engine.season_label(today)
     return _json({
@@ -384,7 +393,7 @@ async def handle_leaderboard(request: web.Request) -> web.Response:
         "me": my_rank,
         "total": len(ranked),
         "friends_count": len(friend_ids),
-        "invite_link": f"https://t.me/{BOT_USERNAME}?start=fr_{tid}",
+        "invite_link": _bot_deep_link(f"fr_{tid}"),
     })
 
 
@@ -727,7 +736,6 @@ async def _notify_duel_invite(bot, challenger_tid: int, opponent_tid: int, duel_
     if bot is None:
         return
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
-    from config import BOT_USERNAME
     from game.login_token import webapp_url_for
 
     nick = f"Игрок {str(challenger_tid)[-4:]}"
@@ -740,11 +748,11 @@ async def _notify_duel_invite(bot, challenger_tid: int, opponent_tid: int, duel_
         pass
 
     url = webapp_url_for(opponent_tid, duel=duel_id)
-    deep = f"https://t.me/{BOT_USERNAME}?start=du_{duel_id}"
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⚔️ Принять бой", web_app=WebAppInfo(url=url))],
-        [InlineKeyboardButton(text="Открыть в боте", url=deep)],
-    ])
+    deep = _bot_deep_link(f"du_{duel_id}")
+    rows = [[InlineKeyboardButton(text="⚔️ Принять бой", web_app=WebAppInfo(url=url))]]
+    if deep:
+        rows.append([InlineKeyboardButton(text="Открыть в боте", url=deep)])
+    kb = InlineKeyboardMarkup(inline_keyboard=rows)
     text = (
         f"⚔️ <b>{nick}</b> вызывает тебя на бой!\n\n"
         f"Упражнение: <b>{ex_name}</b>\n"
@@ -782,7 +790,6 @@ async def handle_duel_meta(request: web.Request) -> web.Response:
     tid = _auth(request)
     if tid is None:
         return _json({"error": "unauthorized"}, 401)
-    from config import BOT_USERNAME
     from game import duel as D
 
     async with async_session() as session:
@@ -805,7 +812,7 @@ async def handle_duel_meta(request: web.Request) -> web.Response:
             "losses": int(getattr(gs, "duel_losses", 0) or 0),
             "draws": int(getattr(gs, "duel_draws", 0) or 0),
         },
-        "invite_friend_link": f"https://t.me/{BOT_USERNAME}?start=fr_{tid}",
+        "invite_friend_link": _bot_deep_link(f"fr_{tid}"),
         "duration_sec": D.DUEL_DURATION_SEC,
     })
 
@@ -874,8 +881,7 @@ async def handle_duel_challenge(request: web.Request) -> web.Response:
         view = await D.enrich(session, d, tid)
         await session.commit()
 
-    from config import BOT_USERNAME
-    view["invite_link"] = f"https://t.me/{BOT_USERNAME}?start=du_{d.id}"
+    view["invite_link"] = _bot_deep_link(f"du_{d.id}")
     await _notify_duel_invite(
         request.app.get("bot"), tid, friend_tid, d.id, view["exercise"]["name"]
     )

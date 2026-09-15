@@ -38,7 +38,7 @@ echo "==> Install runtime on server"
 "${ssh_base[@]}" "${USER}@${HOST}" "cd ${REMOTE_DIR} && python3 -m venv .venv && .venv/bin/pip install -q -U pip && .venv/bin/pip install -q -r requirements.txt && mkdir -p data"
 
 echo "==> Install systemd unit (youvsyou.service)"
-scp -o StrictHostKeyChecking=accept-new \
+rsync -az -e "$rsync_ssh" \
   "${LOCAL_DIR}/deploy/youvsyou.service" \
   "${USER}@${HOST}:/tmp/youvsyou.service"
 "${ssh_base[@]}" "${USER}@${HOST}" \
